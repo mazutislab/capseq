@@ -1,0 +1,113 @@
+
+```{r data, message=FALSE, warning=FALSE}
+
+##
+## libs
+##
+
+library(SingleCellExperiment)
+library(tidyverse)
+library(anndataR)
+library(edgeR)
+
+```
+
+```{r}
+
+##
+## data
+##
+
+adata <- read_h5ad(
+  "facs1_leiden_2.5_sub_annotation_25260x37733_250217_21h46.h5ad"
+)
+
+sce <- adata$to_SingleCellExperiment()
+sce$code <- gsub("-", "_", sce$code)
+
+```
+
+```{r}
+
+##
+## prepare and fit the data 
+##
+
+abundances <- table(sce$cell_type, sce$code_facs) 
+abundances <- unclass(abundances) 
+
+metainfo <- colData(sce)[match(colnames(abundances), sce$code_facs),]
+y_ab <- DGEList(abundances, samples=metainfo)
+
+y_ab$samples$facs <- relevel(y_ab$samples$facs, ref="positive")
+
+design <- model.matrix(~0+code+facs, y_ab$samples)
+y_ab <- estimateDisp(y_ab, design, trend="none")
+
+fit_ab <- glmQLFit(
+  y_ab, design, robust=FALSE, abundance.trend=FALSE
+)
+
+```
+
+```{r, out.width='100%', message=TRUE, warning=TRUE, out.width='100%'}
+
+##
+## get diff abundance using edgeR
+##
+
+contrast <- makeContrasts(pos_vs_neg = -facsnegative, levels = design)
+res <- glmQLFTest(fit_ab, contrast = contrast[,"pos_vs_neg"])
+
+summary(decideTests(res))
+
+topTags(res)
+
+
+```
+
+```{r, out.width='100%', message=FALSE, out.width='100%'}
+
+##
+## plot results
+##
+
+p1 <- res$table %>% 
+  as_tibble(
+    rownames = "cell_type"
+    ) %>% 
+  ggplot(
+    aes(logFC, fct_reorder(cell_type, logFC), fill = logFC)
+    ) +
+  geom_col(width = 0.9) +
+  theme_classic() +
+  theme(
+    axis.line.x = element_line(),
+    axis.line.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.grid.major.y = element_line(linetype = 2)
+    ) +
+  labs(
+    y = "Cell Type",
+    x = "Log2 Fold Change"
+  ) +
+  geom_vline(xintercept = 0, linewidth = 0.5) +
+  expand_limits(y=c(0.1, 0))
+
+p1
+
+```
+
+```{r}
+
+##
+## output res
+##
+
+openxlsx::write.xlsx(
+   res %>% topTags() %>% as_tibble() %>% .[[1]] %>% 
+     rownames_to_column("cell_type"),
+   file = "DA_results_edgeR_paired.xlsx"
+)
+
+```
