@@ -1,9 +1,10 @@
+#libs
 library(tidyverse)
 library(AneuFinder)
 
 ## data
-h_cna <- "path/to/anuefinder_out/MODELS/method-HMM"
-m_cna <- "path/to/anuefinder_out/MODELS/method-HMM"
+h_cna <- "path/to/perCB_GRCh38_out/MODELS/method-HMM"
+m_cna <- "path/to/perCB_GRCm39_out/MODELS/method-HMM"
 
 ###
 ### human
